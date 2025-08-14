@@ -174,9 +174,19 @@ fn assert_not_silence(buffers: [Vec<f32>; 1]) {
 fn test_sampler() {
     let cwd = std::env::current_dir().unwrap();
     let mut out_file = NamedTempFile::new_in(cwd).unwrap();
-    let sample = wav::bit_depth::BitDepth::ThirtyTwoFloat(vec![1.0; MAX_BLOCK_SIZE]);
-    let header = wav::Header::new(wav::header::WAV_FORMAT_PCM, 1, SAMPLE_RATE as u32, 32);
-    wav::write(header, &sample, &mut out_file).unwrap();
+
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: SAMPLE_RATE as u32,
+        bits_per_sample: 32,
+        sample_format: hound::SampleFormat::Float,
+    };
+
+    let mut writer = hound::WavWriter::new(&mut out_file, spec).unwrap();
+    for _ in 0..MAX_BLOCK_SIZE {
+        writer.write_sample(1.0f32).unwrap();
+    }
+    writer.finalize().unwrap();
 
     let world = World::with_load_bundle("file:///usr/lib/lv2/eg-sampler.lv2/");
     let plugin = world

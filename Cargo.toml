@@ -2,7 +2,7 @@
 authors = ["Will S. Medrano <will.s.medrano@gmail.com>"]
 description = "livi is a library for hosting LV2 plugins."
 documentation = "https://docs.rs/livi"
-edition = "2018"
+edition = "2024"
 keywords = ["realtime", "audio", "lv2", "plugins", "music"]
 license = "MIT"
 name = "livi"
@@ -13,6 +13,7 @@ version = "0.7.5"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+hound = "3.5.1"
 lilv = "0.2"
 log = "0.4"
 lv2-sys = "2"
@@ -21,8 +22,7 @@ ringbuf = "0.3"
 
 [dev-dependencies]
 env_logger = "0.10"
-jack = {version = "0.11"}
+jack = { version = "0.11" }
 lazy_static = "1.4"
 structopt = "0.3"
 tempfile = "3.6"
-wav = "1.0"
