@@ -162,31 +162,23 @@ impl std::fmt::Debug for Worker {
 }
 
 // Not real-time safe.
-pub(crate) unsafe fn maybe_get_worker_interface(
+pub(crate) fn maybe_get_worker_interface(
     plugin: &lilv::plugin::Plugin,
     common_uris: &crate::CommonUris,
     instance: &mut lilv::instance::ActiveInstance,
 ) -> Option<lv2_sys::LV2_Worker_Interface> {
-    unsafe {
-        if !plugin.has_feature(&common_uris.worker_schedule_feature_uri) {
-            return None;
-        }
-        // TODO: Remove below after
-        // https://github.com/poidl/lv2_raw/issues/4 is fixed.
-        let descriptor = instance.instance().descriptor().unwrap();
-        type ExtDataFn = extern "C" fn(uri: *const u8) -> *const c_void;
-        let extension_data: Option<ExtDataFn> = std::mem::transmute(descriptor.extension_data);
-        extension_data?;
-        // Delete up to here.
-        Some(
-            *instance
-                .instance()
-                .extension_data::<lv2_sys::LV2_Worker_Interface>(
-                    "http://lv2plug.in/ns/ext/worker#interface",
-                )?
-                .as_ref(),
-        )
+    if !plugin.has_feature(&common_uris.worker_schedule_feature_uri) {
+        return None;
     }
+
+    Some(*unsafe {
+        instance
+            .instance()
+            .extension_data::<lv2_sys::LV2_Worker_Interface>(
+                "http://lv2plug.in/ns/ext/worker#interface",
+            )?
+            .as_ref()
+    })
 }
 
 // Run this in the real-time thread
