@@ -115,10 +115,9 @@ impl std::fmt::Display for RunError {
                 f,
                 "audio input required at least {expected} samples but has {actual}",
             ),
-            RunError::AudioOutputsSizeMismatch { expected, actual } => write!(
-                f,
-                "expected {expected} audio outputs but found {actual}",
-            ),
+            RunError::AudioOutputsSizeMismatch { expected, actual } => {
+                write!(f, "expected {expected} audio outputs but found {actual}",)
+            }
             RunError::AudioOutputSampleCountTooSmall { expected, actual } => write!(
                 f,
                 "audio output required at least {expected} samples but has {actual}",

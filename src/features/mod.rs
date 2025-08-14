@@ -2,8 +2,8 @@ use crate::WorkerManager;
 use lv2_raw::LV2Feature;
 use lv2_sys::LV2_BUF_SIZE__boundedBlockLength;
 use std::pin::Pin;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::{collections::HashSet, ffi::CStr};
 
 pub mod options;

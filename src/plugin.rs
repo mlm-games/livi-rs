@@ -5,11 +5,11 @@ use std::sync::{Arc, Mutex};
 use crate::features::Features;
 use crate::port::{ControlPort, Controls};
 use crate::{
+    CommonUris, Port, PortConnections, PortCounts, PortIndex, PortType,
     error::{InstantiateError, RunError},
     event::LV2AtomSequence,
     features::worker,
     port::{DataType, IOType},
-    CommonUris, Port, PortConnections, PortCounts, PortIndex, PortType,
 };
 use lv2_raw::LV2Feature;
 use lv2_sys::LV2_Worker_Schedule;
@@ -91,91 +91,95 @@ impl Plugin {
         features: Arc<Features>,
         sample_rate: f64,
     ) -> Result<Instance, InstantiateError> {
-        let min_block_size = features.min_block_length();
-        let max_block_size = features.max_block_length();
+        unsafe {
+            let min_block_size = features.min_block_length();
+            let max_block_size = features.max_block_length();
 
-        let (instance_to_worker_sender, instance_to_worker_receiver) = worker::instantiate_queue();
-        let (worker_to_instance_sender, worker_to_instance_receiver) = worker::instantiate_queue();
-        let mut instance_to_worker_sender = Box::new(instance_to_worker_sender);
-        let instance_to_worker_sender_ptr: *mut HeapProducer<u8> =
-            instance_to_worker_sender.as_mut();
-        let mut worker_schedule = Box::new(lv2_sys::LV2_Worker_Schedule {
-            handle: instance_to_worker_sender_ptr.cast(),
-            schedule_work: Some(worker::schedule_work),
-        });
+            let (instance_to_worker_sender, instance_to_worker_receiver) =
+                worker::instantiate_queue();
+            let (worker_to_instance_sender, worker_to_instance_receiver) =
+                worker::instantiate_queue();
+            let mut instance_to_worker_sender = Box::new(instance_to_worker_sender);
+            let instance_to_worker_sender_ptr: *mut HeapProducer<u8> =
+                instance_to_worker_sender.as_mut();
+            let mut worker_schedule = Box::new(lv2_sys::LV2_Worker_Schedule {
+                handle: instance_to_worker_sender_ptr.cast(),
+                schedule_work: Some(worker::schedule_work),
+            });
 
-        let worker_schedule_ptr: *mut LV2_Worker_Schedule = worker_schedule.as_mut();
-        let worker_feature = LV2Feature {
-            uri: lv2_sys::LV2_WORKER__schedule.as_ptr() as *mut i8,
-            data: worker_schedule_ptr.cast(),
-        };
+            let worker_schedule_ptr: *mut LV2_Worker_Schedule = worker_schedule.as_mut();
+            let worker_feature = LV2Feature {
+                uri: lv2_sys::LV2_WORKER__schedule.as_ptr() as *mut i8,
+                data: worker_schedule_ptr.cast(),
+            };
 
-        let iter_features = features.iter_features(&worker_feature);
+            let iter_features = features.iter_features(&worker_feature);
 
-        let mut instance = self
-            .inner
-            .instantiate(sample_rate, iter_features)
-            .ok_or(InstantiateError::UnknownError)?;
+            let mut instance = self
+                .inner
+                .instantiate(sample_rate, iter_features)
+                .ok_or(InstantiateError::UnknownError)?;
 
-        let control_inputs = Controls::new(self.ports_with_type(PortType::ControlInput));
-        let control_outputs = Controls::new(self.ports_with_type(PortType::ControlOutput));
-        let mut audio_inputs = Vec::new();
-        let mut audio_outputs = Vec::new();
-        let mut atom_sequence_inputs = Vec::new();
-        let mut atom_sequence_outputs = Vec::new();
-        let mut cv_inputs = Vec::new();
-        let mut cv_outputs = Vec::new();
-        for port in self.ports() {
-            match port.port_type {
-                PortType::ControlInput => instance
-                    .connect_port(port.index.0, control_inputs.value_ptr(port.index).unwrap()),
-                PortType::ControlOutput => instance
-                    .connect_port(port.index.0, control_outputs.value_ptr(port.index).unwrap()),
-                PortType::AudioInput => audio_inputs.push(port.index),
-                PortType::AudioOutput => audio_outputs.push(port.index),
-                PortType::AtomSequenceInput => atom_sequence_inputs.push(port.index),
-                PortType::AtomSequenceOutput => atom_sequence_outputs.push(port.index),
-                PortType::CVInput => cv_inputs.push(port.index),
-                PortType::CVOutput => cv_outputs.push(port.index),
+            let control_inputs = Controls::new(self.ports_with_type(PortType::ControlInput));
+            let control_outputs = Controls::new(self.ports_with_type(PortType::ControlOutput));
+            let mut audio_inputs = Vec::new();
+            let mut audio_outputs = Vec::new();
+            let mut atom_sequence_inputs = Vec::new();
+            let mut atom_sequence_outputs = Vec::new();
+            let mut cv_inputs = Vec::new();
+            let mut cv_outputs = Vec::new();
+            for port in self.ports() {
+                match port.port_type {
+                    PortType::ControlInput => instance
+                        .connect_port(port.index.0, control_inputs.value_ptr(port.index).unwrap()),
+                    PortType::ControlOutput => instance
+                        .connect_port(port.index.0, control_outputs.value_ptr(port.index).unwrap()),
+                    PortType::AudioInput => audio_inputs.push(port.index),
+                    PortType::AudioOutput => audio_outputs.push(port.index),
+                    PortType::AtomSequenceInput => atom_sequence_inputs.push(port.index),
+                    PortType::AtomSequenceOutput => atom_sequence_outputs.push(port.index),
+                    PortType::CVInput => cv_inputs.push(port.index),
+                    PortType::CVOutput => cv_outputs.push(port.index),
+                }
             }
+
+            let mut inner = instance.activate();
+            #[allow(clippy::mutex_atomic)]
+            let is_alive = Arc::new(Mutex::new(true));
+
+            let worker_interface =
+                worker::maybe_get_worker_interface(&self.inner, &self.common_uris, &mut inner);
+            if let Some(worker_interface) = worker_interface.as_ref() {
+                let worker = worker::Worker::new(
+                    is_alive.clone(),
+                    *worker_interface,
+                    inner.instance().handle(),
+                    instance_to_worker_receiver,
+                    worker_to_instance_sender,
+                );
+                features.worker_manager().add_worker(worker);
+            }
+
+            Ok(Instance {
+                inner,
+                min_block_size,
+                max_block_size,
+                control_inputs,
+                control_outputs,
+                audio_inputs,
+                audio_outputs,
+                atom_sequence_inputs,
+                atom_sequence_outputs,
+                cv_inputs,
+                cv_outputs,
+                worker_interface,
+                worker_to_instance_receiver,
+                _worker_schedule: worker_schedule,
+                _instance_to_worker_sender: instance_to_worker_sender,
+                is_alive,
+                _features: features,
+            })
         }
-
-        let mut inner = instance.activate();
-        #[allow(clippy::mutex_atomic)]
-        let is_alive = Arc::new(Mutex::new(true));
-
-        let worker_interface =
-            worker::maybe_get_worker_interface(&self.inner, &self.common_uris, &mut inner);
-        if let Some(worker_interface) = worker_interface.as_ref() {
-            let worker = worker::Worker::new(
-                is_alive.clone(),
-                *worker_interface,
-                inner.instance().handle(),
-                instance_to_worker_receiver,
-                worker_to_instance_sender,
-            );
-            features.worker_manager().add_worker(worker);
-        }
-
-        Ok(Instance {
-            inner,
-            min_block_size,
-            max_block_size,
-            control_inputs,
-            control_outputs,
-            audio_inputs,
-            audio_outputs,
-            atom_sequence_inputs,
-            atom_sequence_outputs,
-            cv_inputs,
-            cv_outputs,
-            worker_interface,
-            worker_to_instance_receiver,
-            _worker_schedule: worker_schedule,
-            _instance_to_worker_sender: instance_to_worker_sender,
-            is_alive,
-            _features: features,
-        })
     }
 
     /// Iterate over all ports for the plugin.
@@ -290,115 +294,117 @@ impl Instance {
         CVInputs: ExactSizeIterator + Iterator<Item = &'a [f32]>,
         CVOutputs: ExactSizeIterator + Iterator<Item = &'a mut [f32]>,
     {
-        if samples < self.min_block_size {
-            return Err(RunError::SampleCountTooSmall {
-                min_supported: self.min_block_size,
-                actual: samples,
-            });
-        }
-        if samples > self.max_block_size {
-            return Err(RunError::SampleCountTooLarge {
-                max_supported: self.max_block_size,
-                actual: samples,
-            });
-        }
-        if ports.audio_inputs.len() != self.audio_inputs.len() {
-            return Err(RunError::AudioInputsSizeMismatch {
-                expected: self.audio_inputs.len(),
-                actual: ports.audio_inputs.len(),
-            });
-        }
-        for (data, index) in ports.audio_inputs.zip(self.audio_inputs.iter()) {
-            if data.len() < samples {
-                return Err(RunError::AudioInputSampleCountTooSmall {
-                    expected: samples,
-                    actual: data.len(),
+        unsafe {
+            if samples < self.min_block_size {
+                return Err(RunError::SampleCountTooSmall {
+                    min_supported: self.min_block_size,
+                    actual: samples,
                 });
             }
-            self.inner
-                .instance_mut()
-                .connect_port(index.0, data.as_ptr());
-        }
-        if ports.audio_outputs.len() != self.audio_outputs.len() {
-            return Err(RunError::AudioOutputsSizeMismatch {
-                expected: self.audio_outputs.len(),
-                actual: ports.audio_outputs.len(),
-            });
-        }
-        for (data, index) in ports.audio_outputs.zip(self.audio_outputs.iter()) {
-            if data.len() < samples {
-                return Err(RunError::AudioOutputSampleCountTooSmall {
-                    expected: samples,
-                    actual: data.len(),
+            if samples > self.max_block_size {
+                return Err(RunError::SampleCountTooLarge {
+                    max_supported: self.max_block_size,
+                    actual: samples,
                 });
             }
-            self.inner
-                .instance_mut()
-                .connect_port_mut(index.0, data.as_mut_ptr());
-        }
-        if ports.atom_sequence_inputs.len() != self.atom_sequence_inputs.len() {
-            return Err(RunError::AtomSequenceInputsSizeMismatch {
-                expected: self.atom_sequence_inputs.len(),
-                actual: ports.atom_sequence_inputs.len(),
-            });
-        }
-        for (data, index) in ports
-            .atom_sequence_inputs
-            .zip(self.atom_sequence_inputs.iter())
-        {
-            self.inner
-                .instance_mut()
-                .connect_port(index.0, data.as_ptr());
-        }
-        if ports.atom_sequence_outputs.len() != self.atom_sequence_outputs.len() {
-            return Err(RunError::AtomSequenceOutputsSizeMismatch {
-                expected: self.atom_sequence_outputs.len(),
-                actual: ports.atom_sequence_outputs.len(),
-            });
-        }
-        for (data, index) in ports
-            .atom_sequence_outputs
-            .zip(self.atom_sequence_outputs.iter())
-        {
-            data.clear_as_chunk();
-            self.inner
-                .instance_mut()
-                .connect_port_mut(index.0, data.as_mut_ptr());
-        }
-        if ports.cv_inputs.len() != self.cv_inputs.len() {
-            return Err(RunError::CVInputsSizeMismatch {
-                expected: self.cv_inputs.len(),
-                actual: ports.cv_inputs.len(),
-            });
-        }
-        for (data, index) in ports.cv_inputs.zip(self.cv_inputs.iter()) {
-            self.inner
-                .instance_mut()
-                .connect_port(index.0, data.as_ptr());
-        }
-        if ports.cv_outputs.len() != self.cv_outputs.len() {
-            return Err(RunError::CVOutputsSizeMismatch {
-                expected: self.cv_outputs.len(),
-                actual: ports.cv_outputs.len(),
-            });
-        }
-        for (data, index) in ports.cv_outputs.zip(self.cv_outputs.iter()) {
-            self.inner
-                .instance_mut()
-                .connect_port_mut(index.0, data.as_mut_ptr());
-        }
-        self.inner.run(samples);
+            if ports.audio_inputs.len() != self.audio_inputs.len() {
+                return Err(RunError::AudioInputsSizeMismatch {
+                    expected: self.audio_inputs.len(),
+                    actual: ports.audio_inputs.len(),
+                });
+            }
+            for (data, index) in ports.audio_inputs.zip(self.audio_inputs.iter()) {
+                if data.len() < samples {
+                    return Err(RunError::AudioInputSampleCountTooSmall {
+                        expected: samples,
+                        actual: data.len(),
+                    });
+                }
+                self.inner
+                    .instance_mut()
+                    .connect_port(index.0, data.as_ptr());
+            }
+            if ports.audio_outputs.len() != self.audio_outputs.len() {
+                return Err(RunError::AudioOutputsSizeMismatch {
+                    expected: self.audio_outputs.len(),
+                    actual: ports.audio_outputs.len(),
+                });
+            }
+            for (data, index) in ports.audio_outputs.zip(self.audio_outputs.iter()) {
+                if data.len() < samples {
+                    return Err(RunError::AudioOutputSampleCountTooSmall {
+                        expected: samples,
+                        actual: data.len(),
+                    });
+                }
+                self.inner
+                    .instance_mut()
+                    .connect_port_mut(index.0, data.as_mut_ptr());
+            }
+            if ports.atom_sequence_inputs.len() != self.atom_sequence_inputs.len() {
+                return Err(RunError::AtomSequenceInputsSizeMismatch {
+                    expected: self.atom_sequence_inputs.len(),
+                    actual: ports.atom_sequence_inputs.len(),
+                });
+            }
+            for (data, index) in ports
+                .atom_sequence_inputs
+                .zip(self.atom_sequence_inputs.iter())
+            {
+                self.inner
+                    .instance_mut()
+                    .connect_port(index.0, data.as_ptr());
+            }
+            if ports.atom_sequence_outputs.len() != self.atom_sequence_outputs.len() {
+                return Err(RunError::AtomSequenceOutputsSizeMismatch {
+                    expected: self.atom_sequence_outputs.len(),
+                    actual: ports.atom_sequence_outputs.len(),
+                });
+            }
+            for (data, index) in ports
+                .atom_sequence_outputs
+                .zip(self.atom_sequence_outputs.iter())
+            {
+                data.clear_as_chunk();
+                self.inner
+                    .instance_mut()
+                    .connect_port_mut(index.0, data.as_mut_ptr());
+            }
+            if ports.cv_inputs.len() != self.cv_inputs.len() {
+                return Err(RunError::CVInputsSizeMismatch {
+                    expected: self.cv_inputs.len(),
+                    actual: ports.cv_inputs.len(),
+                });
+            }
+            for (data, index) in ports.cv_inputs.zip(self.cv_inputs.iter()) {
+                self.inner
+                    .instance_mut()
+                    .connect_port(index.0, data.as_ptr());
+            }
+            if ports.cv_outputs.len() != self.cv_outputs.len() {
+                return Err(RunError::CVOutputsSizeMismatch {
+                    expected: self.cv_outputs.len(),
+                    actual: ports.cv_outputs.len(),
+                });
+            }
+            for (data, index) in ports.cv_outputs.zip(self.cv_outputs.iter()) {
+                self.inner
+                    .instance_mut()
+                    .connect_port_mut(index.0, data.as_mut_ptr());
+            }
+            self.inner.run(samples);
 
-        if let Some(interface) = self.worker_interface.as_mut() {
-            worker::handle_work_responses(
-                interface,
-                &mut self.worker_to_instance_receiver,
-                self.inner.instance().handle(),
-            );
-            worker::end_run(interface, self.inner.instance().handle());
-        }
+            if let Some(interface) = self.worker_interface.as_mut() {
+                worker::handle_work_responses(
+                    interface,
+                    &mut self.worker_to_instance_receiver,
+                    self.inner.instance().handle(),
+                );
+                worker::end_run(interface, self.inner.instance().handle());
+            }
 
-        Ok(())
+            Ok(())
+        }
     }
 
     /// Get the underlying `lilv::instance::ActiveInstance`.

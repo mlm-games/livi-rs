@@ -155,15 +155,7 @@ pub struct PortConnections<
     pub cv_outputs: CVOutputs,
 }
 
-impl<
-        'a,
-        AudioInputs,
-        AudioOutputs,
-        AtomSequenceInputs,
-        AtomSequenceOutputs,
-        CVInputs,
-        CVOutputs,
-    >
+impl<'a, AudioInputs, AudioOutputs, AtomSequenceInputs, AtomSequenceOutputs, CVInputs, CVOutputs>
     PortConnections<
         'a,
         AudioInputs,

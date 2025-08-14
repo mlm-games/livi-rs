@@ -497,9 +497,11 @@ mod tests {
         assert_eq!(world.iter_plugins().count(), 1);
 
         // No EPiano.
-        assert!(World::with_plugin_predicate(|p| p.uri() != uri)
-            .plugin_by_uri(uri)
-            .is_none());
+        assert!(
+            World::with_plugin_predicate(|p| p.uri() != uri)
+                .plugin_by_uri(uri)
+                .is_none()
+        );
 
         // Empty.
         assert_eq!(
