@@ -58,7 +58,7 @@ fn pop_message(receiver: &mut WorkerMessageReceiver) -> WorkerMessage {
     let size = usize::from_be_bytes(size_as_bytes);
     let mut body: MessageBody = [0; MAX_MESSAGE_SIZE];
     let mut slice = &mut body[..];
-    receiver.write_into(&mut slice, Some(size)).unwrap();
+    receiver.write_into(&mut slice, Some(size));
 
     WorkerMessage { size, body }
 }
