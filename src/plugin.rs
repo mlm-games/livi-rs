@@ -3,7 +3,9 @@ use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 use crate::features::Features;
-use crate::features::worker::LV2_Worker_Schedule;
+use crate::features::worker::{
+    LV2_Handle, LV2_WORKER__schedule, LV2_Worker_Interface, LV2_Worker_Schedule,
+};
 use crate::port::{ControlPort, Controls};
 use crate::{
     CommonUris, Port, PortConnections, PortCounts, PortIndex, PortType,

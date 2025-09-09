@@ -1,3 +1,4 @@
+#![allow(non_camel_case_types)]
 use log::error;
 use lv2_raw::LV2Feature;
 use std::collections::HashMap;
@@ -9,6 +10,16 @@ use std::sync::Mutex;
 
 static URID_MAP: &[u8] = b"http://lv2plug.in/ns/ext/urid#map\0";
 static URID_UNMAP: &[u8] = b"http://lv2plug.in/ns/ext/urid#unmap\0";
+
+// Define missing types locally
+pub type LV2_URID_Map_Handle = *mut std::ffi::c_void;
+
+#[repr(C)]
+pub struct LV2_URID_Unmap {
+    pub handle: *mut std::ffi::c_void,
+    pub unmap:
+        Option<extern "C" fn(handle: LV2_URID_Map_Handle, urid: lv2_raw::LV2Urid) -> *const i8>,
+}
 
 type MapImpl = Mutex<HashMap<CString, u32>>;
 
@@ -75,7 +86,7 @@ impl UridMap {
         });
         let map_impl_ptr = NonNull::from(&urid_map.map);
         let map_data_ptr = NonNull::from(&urid_map.map_data);
-        let unmap_data_ptr = NonNull::from(&urid_map.unmap_data);
+        let unmap_data_ptr: NonNull<LV2_URID_Unmap> = NonNull::from(&urid_map.unmap_data);
         unsafe {
             let mut_ref_pin: Pin<&mut UridMap> = Pin::as_mut(&mut urid_map);
             let mut_ref = Pin::get_unchecked_mut(mut_ref_pin);

@@ -1,9 +1,21 @@
+#![allow(non_camel_case_types)]
 use lv2_raw::{LV2Feature, LV2Urid};
-// use LV2_Options_Option;
 use std::convert::TryFrom;
 use std::{collections::HashMap, ffi::CStr};
 
 static OPTIONS_FEATURE_URI: &[u8] = b"http://lv2plug.in/ns/ext/options#options\0";
+
+// Define LV2_Options_Option locally
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct LV2_Options_Option {
+    pub context: u32,
+    pub subject: u32,
+    pub key: u32,
+    pub size: u32,
+    pub type_: u32,
+    pub value: *const std::ffi::c_void,
+}
 
 const EMPTY_OPTION: LV2_Options_Option = LV2_Options_Option {
     context: 0,

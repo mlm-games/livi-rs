@@ -1,3 +1,5 @@
+#![allow(non_camel_case_types)]
+#![allow(non_upper_case_globals)]
 use crate::WorkerManager;
 use lv2_raw::LV2Feature;
 // use lv2_sys::LV2_BUF_SIZE__boundedBlockLength;
@@ -10,6 +12,8 @@ use std::{collections::HashSet, ffi::CStr};
 pub mod options;
 pub mod urid_map;
 pub mod worker;
+const LV2_BUF_SIZE__boundedBlockLength: &[u8] =
+    b"http://lv2plug.in/ns/ext/buf-size#boundedBlockLength\0";
 
 /// A builder for `Features` objects.
 #[derive(Clone, Debug)]

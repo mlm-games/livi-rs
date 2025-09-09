@@ -16,7 +16,6 @@ version = "0.8.0"
 hound = "3.5.1"
 lilv = "0.2.5"
 log = "0.4"
-# lv2-sys = "2"
 lv2_raw = "0.3.0"
 ringbuf = "0.4.8"
 
@@ -26,9 +25,9 @@ jack = { version = "0.11" }
 lazy_static = "1.4"
 structopt = "0.3"
 tempfile = "3.21.0"
-
+lv2-sys = "2"
 
 [patch.crates-io]
-lilv = { git = "https://github.com/mlm-games/lilv-rs" }
+lilv = { git = "https://github.com/mlm-games/lilv-rs", branch = "main" }
 lv2_raw = { git = "https://github.com/mlm-games/lv2_raw" }
-# lilv-sys = { git = "https://github.com/mlm-games/lilv-sys-rs" }
+lilv-sys = { git = "https://github.com/mlm-games/lilv-sys-rs", branch = "main" }
