@@ -1,9 +1,10 @@
 use crate::WorkerManager;
 use lv2_raw::LV2Feature;
-use lv2_sys::LV2_BUF_SIZE__boundedBlockLength;
+// use lv2_sys::LV2_BUF_SIZE__boundedBlockLength;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 use std::{collections::HashSet, ffi::CStr};
 
 pub mod options;
@@ -38,10 +39,10 @@ impl FeaturesBuilder {
 
         let keep_alive = keep_worker_thread_alive.clone();
         let workers = worker_manager.clone();
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
         let worker_thread = std::thread::spawn(move || {
-            while keep_alive.load(std::sync::atomic::Ordering::Relaxed) {
+            while let Ok(_) = rx.recv_timeout(Duration::from_millis(100)) {
                 workers.run_workers();
-                std::thread::sleep(std::time::Duration::from_millis(100));
             }
         });
         let mut features = Features {

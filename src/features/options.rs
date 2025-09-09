@@ -1,5 +1,5 @@
 use lv2_raw::{LV2Feature, LV2Urid};
-use lv2_sys::LV2_Options_Option;
+// use LV2_Options_Option;
 use std::convert::TryFrom;
 use std::{collections::HashMap, ffi::CStr};
 
@@ -15,7 +15,7 @@ const EMPTY_OPTION: LV2_Options_Option = LV2_Options_Option {
 };
 
 pub struct Options {
-    data: Vec<lv2_sys::LV2_Options_Option>,
+    data: Vec<LV2_Options_Option>,
     values: HashMap<LV2Urid, Box<i32>>,
     feature: LV2Feature,
 }

@@ -8,16 +8,16 @@ license = "MIT"
 name = "livi"
 readme = "README.md"
 repository = "https://github.com/wmedrano/livi-rs"
-version = "0.7.5"
+version = "0.8.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 hound = "3.5.1"
-lilv = "0.2"
+lilv = "0.2.5"
 log = "0.4"
-lv2-sys = "2"
-lv2_raw = "0.2"
+# lv2-sys = "2"
+lv2_raw = "0.3.0"
 ringbuf = "0.4.8"
 
 [dev-dependencies]
@@ -25,8 +25,10 @@ env_logger = "0.11.8"
 jack = { version = "0.11" }
 lazy_static = "1.4"
 structopt = "0.3"
-tempfile = "3.6"
+tempfile = "3.21.0"
 
 
 [patch.crates-io]
-lv2_raw = { path = "../rust-crates/lv2_raw" }
+lilv = { git = "https://github.com/mlm-games/lilv-rs" }
+lv2_raw = { git = "https://github.com/mlm-games/lv2_raw" }
+# lilv-sys = { git = "https://github.com/mlm-games/lilv-sys-rs" }

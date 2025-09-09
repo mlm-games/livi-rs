@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 use crate::features::Features;
+use crate::features::worker::LV2_Worker_Schedule;
 use crate::port::{ControlPort, Controls};
 use crate::{
     CommonUris, Port, PortConnections, PortCounts, PortIndex, PortType,
@@ -11,8 +12,8 @@ use crate::{
     features::worker,
     port::{DataType, IOType},
 };
+// use LV2_Worker_Schedule;
 use lv2_raw::LV2Feature;
-use lv2_sys::LV2_Worker_Schedule;
 use ringbuf::HeapProd;
 
 /// A plugin that can be used to instantiate plugin instances.
@@ -102,14 +103,14 @@ impl Plugin {
             let mut instance_to_worker_sender = Box::new(instance_to_worker_sender);
             let instance_to_worker_sender_ptr: *mut HeapProd<u8> =
                 instance_to_worker_sender.as_mut();
-            let mut worker_schedule = Box::new(lv2_sys::LV2_Worker_Schedule {
+            let mut worker_schedule = Box::new(LV2_Worker_Schedule {
                 handle: instance_to_worker_sender_ptr.cast(),
                 schedule_work: Some(worker::schedule_work),
             });
 
             let worker_schedule_ptr: *mut LV2_Worker_Schedule = worker_schedule.as_mut();
             let worker_feature = LV2Feature {
-                uri: lv2_sys::LV2_WORKER__schedule.as_ptr() as *mut i8,
+                uri: LV2_WORKER__schedule.as_ptr() as *mut i8,
                 data: worker_schedule_ptr.cast(),
             };
 
@@ -246,9 +247,9 @@ pub struct Instance {
     atom_sequence_outputs: Vec<PortIndex>,
     cv_inputs: Vec<PortIndex>,
     cv_outputs: Vec<PortIndex>,
-    worker_interface: Option<lv2_sys::LV2_Worker_Interface>,
+    worker_interface: Option<LV2_Worker_Interface>,
     worker_to_instance_receiver: worker::WorkerMessageReceiver,
-    _worker_schedule: Box<lv2_sys::LV2_Worker_Schedule>,
+    _worker_schedule: Box<LV2_Worker_Schedule>,
     _instance_to_worker_sender: Box<worker::WorkerMessageSender>,
     is_alive: Arc<Mutex<bool>>,
     _features: Arc<Features>,

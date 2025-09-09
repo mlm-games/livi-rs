@@ -243,11 +243,8 @@ fn copy_atom_sequence_to_midi_out(
 ) {
     let mut writer = dst.writer(ps);
     for event in src.iter() {
-        if event.event.body.mytype != midi_urid {
-            warn!(
-                "Found non-midi event with URID: {}",
-                event.event.body.mytype
-            );
+        if event.event.body.type_ != midi_urid {
+            warn!("Found non-midi event with URID: {}", event.event.body.type_);
             continue;
         }
         let jack_event = jack::RawMidi {

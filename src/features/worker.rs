@@ -34,21 +34,20 @@ fn publish_message(
     sender: &mut WorkerMessageSender,
     size: usize,
     body: *mut u8,
-) -> lv2_sys::LV2_Worker_Status {
+) -> LV2_Worker_Status {
     if size > MAX_MESSAGE_SIZE {
-        return lv2_sys::LV2_Worker_Status_LV2_WORKER_ERR_NO_SPACE;
+        return LV2_Worker_Status_LV2_WORKER_ERR_NO_SPACE;
     }
     let mut body = unsafe { slice::from_raw_parts(body, size) };
     let total_size = size_of::<usize>() + size;
     if sender.vacant_len() < total_size {
-        return lv2_sys::LV2_Worker_Status_LV2_WORKER_ERR_NO_SPACE;
+        return LV2_Worker_Status_LV2_WORKER_ERR_NO_SPACE;
     }
     let size_as_bytes = size.to_be_bytes();
     sender.push_slice(&size_as_bytes);
-    let result = sender.read_from(&mut body, Some(size));
-    match result {
-        Some(_) => lv2_sys::LV2_Worker_Status_LV2_WORKER_SUCCESS,
-        None => lv2_sys::LV2_Worker_Status_LV2_WORKER_ERR_UNKNOWN,
+    match sender.read_from(&mut body, Some(size)) {
+        Some(_) => LV2_Worker_Status_LV2_WORKER_SUCCESS,
+        None => LV2_Worker_Status_LV2_WORKER_ERR_UNKNOWN,
     }
 }
 
@@ -64,19 +63,19 @@ fn pop_message(receiver: &mut WorkerMessageReceiver) -> WorkerMessage {
 }
 
 pub extern "C" fn schedule_work(
-    handle: lv2_sys::LV2_Worker_Schedule_Handle,
+    handle: LV2_Worker_Schedule_Handle,
     size: u32,
     body: *const c_void,
-) -> lv2_sys::LV2_Worker_Status {
+) -> LV2_Worker_Status {
     let sender = unsafe { &mut *(handle as *mut WorkerMessageSender) };
     publish_message(sender, size as usize, body as *mut u8)
 }
 
 extern "C" fn worker_respond(
-    handle: lv2_sys::LV2_Worker_Respond_Handle,
+    handle: LV2_Worker_Respond_Handle,
     size: u32,
     body: *const c_void,
-) -> lv2_sys::LV2_Worker_Status {
+) -> LV2_Worker_Status {
     let sender = unsafe { &mut *(handle as *mut WorkerMessageSender) };
     publish_message(sender, size as usize, body as *mut u8)
 }
@@ -93,8 +92,8 @@ extern "C" fn worker_respond(
 /// you have to keep calling do_work while the plugin is alive.
 pub struct Worker {
     plugin_is_alive: Arc<Mutex<bool>>,
-    interface: lv2_sys::LV2_Worker_Interface,
-    instance_handle: lv2_sys::LV2_Handle,
+    interface: LV2_Worker_Interface,
+    instance_handle: LV2_Handle,
     receiver: WorkerMessageReceiver, // Where we find work to do
     sender: WorkerMessageSender,     // Where we send the results of our work
 }
@@ -105,8 +104,8 @@ unsafe impl Sync for Worker {}
 impl Worker {
     pub(crate) fn new(
         plugin_is_alive: Arc<Mutex<bool>>,
-        interface: lv2_sys::LV2_Worker_Interface,
-        instance_handle: lv2_sys::LV2_Handle,
+        interface: LV2_Worker_Interface,
+        instance_handle: LV2_Handle,
         receiver: WorkerMessageReceiver,
         sender: WorkerMessageSender,
     ) -> Self {
@@ -166,7 +165,7 @@ pub(crate) fn maybe_get_worker_interface(
     plugin: &lilv::plugin::Plugin,
     common_uris: &crate::CommonUris,
     instance: &mut lilv::instance::ActiveInstance,
-) -> Option<lv2_sys::LV2_Worker_Interface> {
+) -> Option<LV2_Worker_Interface> {
     if !plugin.has_feature(&common_uris.worker_schedule_feature_uri) {
         return None;
     }
@@ -174,9 +173,7 @@ pub(crate) fn maybe_get_worker_interface(
     Some(*unsafe {
         instance
             .instance()
-            .extension_data::<lv2_sys::LV2_Worker_Interface>(
-                "http://lv2plug.in/ns/ext/worker#interface",
-            )?
+            .extension_data::<LV2_Worker_Interface>("http://lv2plug.in/ns/ext/worker#interface")?
             .as_ref()
     })
 }
@@ -184,9 +181,9 @@ pub(crate) fn maybe_get_worker_interface(
 // Run this in the real-time thread
 // to process responses from the async worker.
 pub(crate) fn handle_work_responses(
-    worker_interface: &mut lv2_sys::LV2_Worker_Interface,
+    worker_interface: &mut LV2_Worker_Interface,
     receiver: &mut WorkerMessageReceiver,
-    handle: lv2_sys::LV2_Handle,
+    handle: LV2_Handle,
 ) {
     while receiver.occupied_len() > size_of::<usize>() {
         let mut message = pop_message(receiver);
@@ -199,10 +196,7 @@ pub(crate) fn handle_work_responses(
 // Run this in the real-time thread
 // to indicate all work responses have
 // been handled.
-pub(crate) fn end_run(
-    worker_interface: &mut lv2_sys::LV2_Worker_Interface,
-    handle: lv2_sys::LV2_Handle,
-) {
+pub(crate) fn end_run(worker_interface: &mut LV2_Worker_Interface, handle: LV2_Handle) {
     if let Some(end_function) = worker_interface.end_run {
         unsafe { end_function(handle) };
     }
@@ -280,3 +274,41 @@ mod tests {
         assert_eq!(sentence_to_transfer, message_body);
     }
 }
+
+// For android (copied from lv2-sys)
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct LV2_Worker_Interface {
+    pub work: Option<
+        unsafe extern "C" fn(
+            instance: *mut c_void,
+            respond: Option<
+                unsafe extern "C" fn(handle: *mut c_void, size: u32, data: *const c_void) -> i32,
+            >,
+            handle: *mut c_void,
+            size: u32,
+            data: *const c_void,
+        ) -> i32,
+    >,
+    pub work_response:
+        Option<unsafe extern "C" fn(instance: *mut c_void, size: u32, body: *const c_void) -> i32>,
+    pub end_run: Option<unsafe extern "C" fn(instance: *mut c_void) -> i32>,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct LV2_Worker_Schedule {
+    pub handle: *mut c_void,
+    pub schedule_work:
+        Option<unsafe extern "C" fn(handle: *mut c_void, size: u32, data: *const c_void) -> i32>,
+}
+
+// Worker status codes
+pub type LV2_Worker_Status = i32;
+pub const LV2_WORKER_SUCCESS: LV2_Worker_Status = 0;
+pub const LV2_WORKER_ERR_UNKNOWN: LV2_Worker_Status = 1;
+pub const LV2_WORKER_ERR_NO_SPACE: LV2_Worker_Status = 2;
+
+// Extension URIs
+pub const LV2_WORKER__interface: &str = "http://lv2plug.in/ns/ext/worker#interface";
+pub const LV2_WORKER__schedule: &[u8] = b"http://lv2plug.in/ns/ext/worker#schedule\0";

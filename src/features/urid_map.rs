@@ -28,7 +28,7 @@ extern "C" fn do_map(handle: lv2_raw::LV2UridMapHandle, uri_ptr: *const i8) -> l
     id
 }
 
-extern "C" fn do_unmap(handle: lv2_sys::LV2_URID_Map_Handle, urid: lv2_raw::LV2Urid) -> *const i8 {
+extern "C" fn do_unmap(handle: LV2_URID_Map_Handle, urid: lv2_raw::LV2Urid) -> *const i8 {
     let handle: *const MapImpl = handle as *const _;
     let map_mutex = unsafe { &*handle };
     let map = map_mutex.lock().unwrap();
@@ -43,7 +43,7 @@ extern "C" fn do_unmap(handle: lv2_sys::LV2_URID_Map_Handle, urid: lv2_raw::LV2U
 pub struct UridMap {
     map: MapImpl,
     map_data: lv2_raw::LV2UridMap,
-    unmap_data: lv2_sys::LV2_URID_Unmap,
+    unmap_data: LV2_URID_Unmap,
     urid_map_feature: LV2Feature,
     urid_unmap_feature: LV2Feature,
     _pin: std::marker::PhantomPinned,
@@ -59,7 +59,7 @@ impl UridMap {
                 handle: std::ptr::null_mut(),
                 map: do_map,
             },
-            unmap_data: lv2_sys::LV2_URID_Unmap {
+            unmap_data: LV2_URID_Unmap {
                 handle: std::ptr::null_mut(),
                 unmap: Some(do_unmap),
             },
