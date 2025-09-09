@@ -4,6 +4,7 @@ use lv2_raw::LV2Feature;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ffi::{CStr, CString};
+use std::os::raw::c_char;
 use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::Mutex;
@@ -11,21 +12,23 @@ use std::sync::Mutex;
 static URID_MAP: &[u8] = b"http://lv2plug.in/ns/ext/urid#map\0";
 static URID_UNMAP: &[u8] = b"http://lv2plug.in/ns/ext/urid#unmap\0";
 
-// Define missing types locally
 pub type LV2_URID_Map_Handle = *mut std::ffi::c_void;
 
 #[repr(C)]
 pub struct LV2_URID_Unmap {
     pub handle: *mut std::ffi::c_void,
     pub unmap:
-        Option<extern "C" fn(handle: LV2_URID_Map_Handle, urid: lv2_raw::LV2Urid) -> *const i8>,
+        Option<extern "C" fn(handle: LV2_URID_Map_Handle, urid: lv2_raw::LV2Urid) -> *const c_char>,
 }
 
 type MapImpl = Mutex<HashMap<CString, u32>>;
 
 /// # Safety
 /// Dereference to `uri_ptr` may be unsafe.
-extern "C" fn do_map(handle: lv2_raw::LV2UridMapHandle, uri_ptr: *const i8) -> lv2_raw::LV2Urid {
+extern "C" fn do_map(
+    handle: lv2_raw::LV2UridMapHandle,
+    uri_ptr: *const c_char,
+) -> lv2_raw::LV2Urid {
     let handle: *const MapImpl = handle as *const _;
     let map_mutex = unsafe { &*handle };
     let mut map = map_mutex.lock().unwrap();
@@ -39,13 +42,13 @@ extern "C" fn do_map(handle: lv2_raw::LV2UridMapHandle, uri_ptr: *const i8) -> l
     id
 }
 
-extern "C" fn do_unmap(handle: LV2_URID_Map_Handle, urid: lv2_raw::LV2Urid) -> *const i8 {
+extern "C" fn do_unmap(handle: LV2_URID_Map_Handle, urid: lv2_raw::LV2Urid) -> *const c_char {
     let handle: *const MapImpl = handle as *const _;
     let map_mutex = unsafe { &*handle };
     let map = map_mutex.lock().unwrap();
     for (uri, id) in map.iter() {
         if *id == urid {
-            return uri.as_ptr();
+            return uri.as_ptr(); // *const c_char
         }
     }
     std::ptr::null()
@@ -75,11 +78,11 @@ impl UridMap {
                 unmap: Some(do_unmap),
             },
             urid_map_feature: LV2Feature {
-                uri: URID_MAP.as_ptr().cast(),
+                uri: URID_MAP.as_ptr().cast(), // *const c_char
                 data: std::ptr::null_mut(),
             },
             urid_unmap_feature: LV2Feature {
-                uri: URID_UNMAP.as_ptr().cast(),
+                uri: URID_UNMAP.as_ptr().cast(), // *const c_char
                 data: std::ptr::null_mut(),
             },
             _pin: std::marker::PhantomPinned,
@@ -99,7 +102,7 @@ impl UridMap {
     }
 
     pub fn map(&self, uri: &CStr) -> lv2_raw::LV2Urid {
-        do_map(self.map_data.handle, uri.as_ptr())
+        do_map(self.map_data.handle, uri.as_ptr()) // *const c_char
     }
 
     pub fn unmap(&self, urid: lv2_raw::LV2Urid) -> Option<&str> {
